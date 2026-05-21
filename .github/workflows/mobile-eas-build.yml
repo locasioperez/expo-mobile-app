@@ -24,9 +24,9 @@ on:
           - production
 
   # Also run automatically on pushes to main (optional – keep/remove as you prefer)
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   eas-build:
