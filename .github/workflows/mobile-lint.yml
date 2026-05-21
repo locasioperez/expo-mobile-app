@@ -1,0 +1,39 @@
+name: mobile-lint
+
+on:
+  # Allow manual runs from the GitHub UI
+  workflow_dispatch:
+
+  # Run automatically on pushes to main (optional)
+  push:
+    branches:
+      - main
+
+  # Optionally on PRs targeting main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repo so the workflow has your code
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Step 2: Install Node on the runner and enable npm caching
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22 # Or your project’s Node version
+          cache: "npm" # Speeds up installs across runs
+
+      # Step 3: Install project dependencies using a clean, reproducible install
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run lint
+      - name: Run lint
+        run: npm run lint
