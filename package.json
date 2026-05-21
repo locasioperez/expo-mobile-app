@@ -6,6 +6,7 @@
     "start": "expo start",
     "dev:dev": "cross-env APP_ENV=development expo start",
     "dev:staging": "cross-env APP_ENV=staging expo start",
+    "dev:production": "cross-env APP_ENV=production expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -46,6 +47,8 @@
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "eas-cli": "^19.0.5",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~55.0.1",
     "typescript": "~5.9.2"
   },
   "private": true

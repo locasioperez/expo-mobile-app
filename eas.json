@@ -21,7 +21,7 @@
     "production": {
       "distribution": "store",
       "env": {
-        "APP_ENV": "staging"
+        "APP_ENV": "production"
       },
       "channel": "production"
     }

@@ -1,8 +1,10 @@
 // apiClient.ts
 import Constants from "expo-constants";
 
+type AppEnv = "development" | "staging" | "production";
+
 type ExtraConfig = {
-  appEnv: "development" | "staging";
+  appEnv: AppEnv;
   apiBaseUrl: string;
 };
 
@@ -31,8 +33,10 @@ function getExtra(): ExtraConfig | undefined {
 
 const extra = getExtra();
 
-export const appEnv: "development" | "staging" = extra?.appEnv ?? "development";
+// Default to development if nothing is set
+export const appEnv: AppEnv = extra?.appEnv ?? "development";
 
+// Default base URL is dev; app.config.ts will usually set this for you
 export const apiBaseUrl: string =
   extra?.apiBaseUrl ?? "https://api-dev.example.test";
 
