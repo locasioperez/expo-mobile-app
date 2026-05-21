@@ -1,0 +1,76 @@
+name: mobile-eas-build
+
+on:
+  # Allow manual runs from the GitHub UI, with inputs for platform/profile
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: "development"
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+  # Also run automatically on pushes to main (optional – keep/remove as you prefer)
+  push:
+    branches:
+      - main
+
+jobs:
+  eas-build:
+    # Use GitHub-hosted Ubuntu runner (standard for EAS builds)
+    runs-on: ubuntu-latest
+
+    env:
+      # Expo access token, stored as a GitHub Actions secret
+      # This authenticates the workflow with your Expo account
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      # Step 1: Check out the repo so the workflow has your code
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Step 2: Install Node on the runner and enable npm caching
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22 # Use current LTS / your project’s Node version
+          cache: "npm" # Speeds up installs across runs
+
+      # Step 3: Install Expo/EAS CLI and log in using the EXPO_TOKEN
+      # This action wires up the EAS CLI for the next steps
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ env.EXPO_TOKEN }}
+
+      # Step 4: Install project dependencies using a clean, reproducible install
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 5: Trigger an EAS build using the selected profile and platform
+      #  - profile: maps to eas.json (development/staging/production) which sets APP_ENV
+      #  - platform: ios/android/all
+      #  - --non-interactive: required for CI
+      #  - --no-wait: don’t wait for the build to finish; check status in Expo dashboard
+      - name: Trigger EAS build
+        run: |
+          eas build \
+            --platform ${{ github.event.inputs.platform || 'all' }} \
+            --profile  ${{ github.event.inputs.profile  || 'development' }} \
+            --non-interactive \
+            --no-wait
