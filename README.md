@@ -1,57 +1,228 @@
-# Welcome to your Expo app 👋
+# expo-mobile-app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Environment-aware Expo app with development and staging builds, wired for local iOS/Android testing and ready for EAS build profiles.
 
-## Get started
+This project uses:
 
-1. Install dependencies
+- Expo + React Native
+- Dynamic `app.config.ts` with `APP_ENV`-driven configuration [file:46]
+- A small `apiClient` that reads environment info from Expo config and exposes it in the UI
+
+---
+
+## Prerequisites
+
+- Node.js (LTS) and npm
+- macOS with Xcode for iOS Simulator (no Apple Developer account required for simulator) [web:1]
+- Android Studio for Android emulator (optional) [web:2]
+- Expo CLI (installed via `npx` in the commands below)
+
+---
+
+## Install and bootstrap
+
+1. Install dependencies:
 
    ```bash
    npm install
    ```
 
-2. Start the app
+2. Start Metro bundler with an environment-specific script (see next section).
 
-   ```bash
-   npx expo start
-   ```
+You can start developing by editing the files inside the `app` (or `src/app`) directory. This project uses file-based routing via Expo Router. [file:46][web:3]
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Running the app locally
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The home screen imports `appEnv` and `apiBaseUrl` from `apiClient` and displays a “Current environment” row so you can visually verify which environment a given run is using. [file:46]
 
-## Get a fresh project
+### Development environment (APP_ENV=development)
 
-When you're ready, run:
+Add this script in `package.json`:
 
-```bash
-npm run reset-project
+```jsonc
+"scripts": {
+  "dev:dev": "APP_ENV=development npx expo start"
+}
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Run:
 
-### Other setup steps
+```bash
+npm run dev:dev
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Then in the Metro CLI:
 
-## Learn more
+- Press `i` to open the iOS Simulator
+- Press `a` to open the Android emulator
 
-To learn more about developing your project with Expo, look at the following resources:
+On the home screen you should see something like:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- Environment: `development`
+- API base URL: `https://api-dev.example.test` (stubbed value from config)
 
-## Join the community
+This confirms the environment wiring from `APP_ENV` → `app.config.ts` → `extra` → `apiClient` → UI.
 
-Join our community of developers creating universal apps.
+### Staging environment (APP_ENV=staging)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# expo-mobile-app
+Add this script in `package.json`:
+
+```jsonc
+"scripts": {
+  "dev:staging": "APP_ENV=staging npx expo start"
+}
+```
+
+Run:
+
+```bash
+npm run dev:staging
+```
+
+Open the app on iOS Simulator or Android emulator as above.
+
+You should now see:
+
+- Environment: `staging`
+- API base URL: `https://api-staging.example.test` (stubbed)
+
+This gives you an instant environment validation check per run.
+
+---
+
+## Configuration: `app.config.ts`
+
+The dynamic Expo config is responsible for translating `APP_ENV` into app behavior.
+
+Core responsibilities:
+
+- Read `APP_ENV` from `process.env` with a default of `development`
+- Expose env info to JS via `extra`:
+
+  ```ts
+  extra: {
+    appEnv,
+    apiBaseUrl: appEnv === "staging"
+      ? "https://api-staging.example.test"
+      : "https://api-dev.example.test",
+  }
+  ```
+
+- Configure bundle identifiers / package names per environment:
+
+  ```ts
+  ios: {
+    bundleIdentifier: appEnv === "staging"
+      ? "com.yourcompany.expoapp.staging"
+      : "com.yourcompany.expoapp.dev",
+  },
+  android: {
+    package: appEnv === "staging"
+      ? "com.yourcompany.expoapp.staging"
+      : "com.yourcompany.expoapp.dev",
+  },
+  ```
+
+- Set up `updates.url` and `runtimeVersion` so OTA updates can later be targeted per channel/runtime when you use EAS. [web:4]
+
+This lets you have separate dev/staging apps that can coexist on devices and be rolled out independently once you start building with EAS.
+
+---
+
+## Runtime environment access: `apiClient`
+
+`apiClient` is responsible for reading the Expo config at runtime and exposing environment data to the app.
+
+Typical behavior:
+
+- Reads `extra` from `Constants.expoConfig` (or manifest fallback on some platforms) [web:5]
+- Exports:
+  - `appEnv` – `"development"` or `"staging"`
+  - `apiBaseUrl` – the base URL for network calls in the current environment
+- Logs the resolved values on startup so you can see them in Metro logs
+- The home screen imports `appEnv` and `apiBaseUrl` and renders them in a “Current environment” row
+
+This pattern makes environment validation and future observability (e.g., logging with env tags) straightforward.
+
+---
+
+## EAS build profiles
+
+This project is already wired with EAS build profiles in `eas.json`. [file:47]
+
+`eas.json`:
+
+```jsonc
+{
+  "cli": {
+    "appVersionSource": "remote",
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "development",
+      },
+      "channel": "development",
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "staging",
+      },
+      "channel": "staging",
+    },
+    "production": {
+      "distribution": "store",
+      "env": {
+        "APP_ENV": "staging",
+      },
+      "channel": "production",
+    },
+  },
+}
+```
+
+How this ties into the app:
+
+- Each build profile sets `env.APP_ENV` for that build. [file:47]
+- `app.config.ts` reads `process.env.APP_ENV` and:
+  - sets `extra.appEnv` and `extra.apiBaseUrl`
+  - chooses bundle identifiers / package names based on the environment
+- At runtime, `apiClient` reads `extra`, and the UI/console confirms which environment that build is targeting.
+
+### Example EAS commands (for when you’re ready)
+
+Once you’re ready to use EAS and have platform accounts configured, you can run:
+
+```bash
+# Dev client / development env
+npx eas build --profile development --platform ios
+
+# Staging env internal build
+npx eas build --profile staging --platform ios
+
+# Store build (currently wired to staging env)
+npx eas build --profile production --platform ios
+```
+
+Each of these builds will:
+
+- Use the correct `APP_ENV` from `eas.json`
+- Show the environment and base URL on the home screen
+- Be associated with the corresponding EAS update channel (`development`, `staging`, `production`) for OTA updates later [web:4][file:47]
+
+---
+
+## iOS and Android (local only)
+
+Right now, the project is set up to:
+
+- Run on iOS Simulator and Android emulator via `npx expo start` [file:46]
+- Use dynamic config for bundle IDs and API base URLs
+- Be ready for EAS profiles, but you can still work entirely locally without an Apple Developer account or EAS setup
+
+Use the `dev:dev` and `dev:staging` scripts during local development, and move to EAS builds when you want installable dev/staging apps on devices.
