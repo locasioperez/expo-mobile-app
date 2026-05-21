@@ -1,144 +1,184 @@
 # expo-mobile-app
 
-Environment-aware Expo app with development and staging builds, wired for local iOS/Android testing and ready for EAS build profiles.
-
-This project uses:
-
-- Expo + React Native
-- Dynamic `app.config.ts` with `APP_ENV`-driven configuration
-- A small `apiClient` that reads environment info from Expo config and exposes it in the UI
+Expo + React Native mobile app with explicit **development**, **staging**, and **production** environments.  
+Environment selection is driven by `APP_ENV` and is consistent across local runs and EAS build profiles.
 
 ---
 
 ## Prerequisites
 
 - Node.js (LTS) and npm
-- macOS with Xcode for iOS Simulator (no Apple Developer account required for simulator)
-- Android Studio for Android emulator (optional)
-- Expo CLI (installed via `npx` in the commands below)
+- iOS Simulator (Xcode) and/or Android emulator
+- Expo CLI via `npx expo`
 
 ---
 
-## Install and bootstrap
+## Installation
 
-1. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-2. Start Metro bundler with an environment-specific script (see next section).
-
-You can start developing by editing the files inside the `app` (or `src/app`) directory. This project uses file-based routing via Expo Router.
+```bash
+npm install
+```
 
 ---
 
 ## Running the app locally
 
-The home screen imports `appEnv` and `apiBaseUrl` from `apiClient` and displays a “Current environment” row so you can visually verify which environment a given run is using.
+The app reads `APP_ENV` in `app.config.ts`, exposes it via `extra.appEnv` and `extra.apiBaseUrl`, and `apiClient` surfaces these in the UI (for example, “Current environment” and base URL).
 
-### Development environment (APP_ENV=development)
+### Environment-aware scripts
 
-Add this script in `package.json`:
-
-```jsonc
-"scripts": {
-  "dev:dev": "APP_ENV=development npx expo start"
-}
-```
-
-Run:
-
-```bash
-npm run dev:dev
-```
-
-Then in the Metro CLI:
-
-- Press `i` to open the iOS Simulator
-- Press `a` to open the Android emulator
-
-On the home screen you should see something like:
-
-- Environment: `development`
-- API base URL: `https://api-dev.example.test` (stubbed value from config)
-
-This confirms the environment wiring from `APP_ENV` → `app.config.ts` → `extra` → `apiClient` → UI.
-
-### Staging environment (APP_ENV=staging)
-
-Add this script in `package.json`:
+Defined in `package.json`:
 
 ```jsonc
 "scripts": {
-  "dev:staging": "APP_ENV=staging npx expo start"
+  "start": "expo start",
+  "dev:dev": "cross-env APP_ENV=development expo start",
+  "dev:staging": "cross-env APP_ENV=staging expo start",
+  "dev:production": "cross-env APP_ENV=production expo start",
+  "android": "expo start --android",
+  "ios": "expo start --ios",
+  "web": "expo start --web",
+  "lint": "expo lint"
 }
 ```
 
-Run:
+Usage (with Expo Go on simulator/emulator):
 
-```bash
-npm run dev:staging
+- Development:
+
+  ```bash
+  npm run dev:dev
+  ```
+
+- Staging:
+
+  ```bash
+  npm run dev:staging
+  ```
+
+- Production (for validation):
+
+  ```bash
+  npm run dev:production
+  ```
+
+Then, in the Expo dev tools or terminal, choose **Expo Go** and open on iOS Simulator or Android emulator. The environment indicator in the app should match the script you used.
+
+---
+
+## Environment configuration
+
+`app.config.ts` centralizes environment-specific behavior:
+
+- Supported environments: `development`, `staging`, `production` (via `APP_ENV`)
+- Per-environment values:
+  - App name:
+    - `expo Mobile App Development`
+    - `expo Mobile App Staging`
+    - `expo Mobile App`
+  - API base URL (example placeholders):
+    - Dev: `https://api-dev.example.test`
+    - Staging: `https://api-staging.example.test`
+    - Prod: `https://api.example.com`
+  - Bundle identifiers / package names:
+    - iOS / Android dev: `com.yourcompany.expoapp.dev`
+    - iOS / Android staging: `com.yourcompany.expoapp.staging`
+    - iOS / Android prod: `com.yourcompany.expoapp`
+
+These values are exposed via `extra.appEnv` and `extra.apiBaseUrl`, and consumed by `apiClient` and the UI.
+
+---
+
+## EAS build profiles
+
+`eas.json` defines environment-aligned build profiles:
+
+```jsonc
+{
+  "cli": {
+    "appVersionSource": "remote",
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "APP_ENV": "development" },
+      "channel": "development",
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": { "APP_ENV": "staging" },
+      "channel": "staging",
+    },
+    "production": {
+      "distribution": "store",
+      "env": { "APP_ENV": "production" },
+      "channel": "production",
+    },
+  },
+}
 ```
 
-Open the app on iOS Simulator or Android emulator as above.
+Each profile:
 
-You should now see:
+- Sets `APP_ENV` for the build.
+- Selects the corresponding update channel (for future EAS Update usage).
+- Uses `app.config.ts` to derive app name, bundle IDs, and API base URL.
 
-- Environment: `staging`
-- API base URL: `https://api-staging.example.test` (stubbed)
+Example build commands (for later, when accounts are configured):
 
-This gives you an instant environment validation check per run.
+```bash
+# Development build
+eas build --profile development --platform ios
 
----
+# Staging build
+eas build --profile staging --platform ios
 
-## Configuration: `app.config.ts`
-
-The dynamic Expo config is responsible for translating `APP_ENV` into app behavior.
-
-Core responsibilities:
-
-- Read `APP_ENV` from `process.env` with a default of `development`
-- Expose env info to JS via `extra`:
-
-  ```ts
-  extra: {
-    appEnv,
-    apiBaseUrl: appEnv === "staging"
-      ? "https://api-staging.example.test"
-      : "https://api-dev.example.test",
-  }
-  ```
-
-- Configure bundle identifiers / package names per environment:
-
-  ```ts
-  ios: {
-    bundleIdentifier: appEnv === "staging"
-      ? "com.yourcompany.expoapp.staging"
-      : "com.yourcompany.expoapp.dev",
-  },
-  android: {
-    package: appEnv === "staging"
-      ? "com.yourcompany.expoapp.staging"
-      : "com.yourcompany.expoapp.dev",
-  },
-  ```
-
-- Set up `updates.url` and `runtimeVersion` so OTA updates can later be targeted per channel/runtime when you use EAS.
-
-This lets you have separate dev/staging apps that can coexist on devices and be rolled out independently once you start building with EAS.
+# Production build
+eas build --profile production --platform ios
+```
 
 ---
 
-## Runtime environment access: `apiClient`
+## GitHub workflows
 
-`apiClient` is responsible for reading the Expo config at runtime and exposing environment data to the app.
+Located under `.github/workflows`:
 
-Typical behavior:
+### `mobile-lint.yml`
 
-- Reads `extra` from `Constants.expoConfig` (or manifest fallback on some platforms)
-- Exports:
-  - `appEnv` – `"development"` or `"staging"`
-  - `apiBaseUrl` – the base URL for network calls in the current environment
-- Logs the resolved values on startup so
+- Runs on:
+  - Manual trigger (`workflow_dispatch`)
+  - Pushes to `main`
+  - Pull requests targeting `main`
+- Steps:
+  - Checkout repo
+  - Setup Node with npm cache
+  - `npm ci`
+  - `npm run lint`
+- Purpose: fast feedback on linting and basic code quality for the mobile app.
+
+### `mobile-eas-build.yml`
+
+- **Manual only**: triggered via `workflow_dispatch` from the GitHub Actions UI.
+- Inputs:
+  - `platform`: `all` | `ios` | `android`
+  - `profile`: `development` | `staging` | `production`
+- Steps:
+  - Checkout repo
+  - Setup Node
+  - Setup Expo/EAS using `EXPO_TOKEN` GitHub secret
+  - `npm ci`
+  - `eas build` with the chosen profile and platform (`--non-interactive --no-wait`)
+- Purpose: on-demand EAS builds aligned with `eas.json` profiles, without tying builds to any particular branch or release flow yet.
+
+---
+
+## Linting
+
+ESLint is configured using `eslint-config-expo` with TypeScript support. Run:
+
+```bash
+npm run lint
+```
+
+to check for common issues (e.g., equality, unused variables, basic TypeScript rules).
